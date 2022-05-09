@@ -706,11 +706,12 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
-         <!-- webclient dependency -->
-		<dependency>
-		    <groupId>org.springframework.boot</groupId>
-		    <artifactId>spring-boot-starter-webflux</artifactId>
-		</dependency>
+        <!-- https://mvnrepository.com/artifact/org.springframework/spring-webflux -->
+<dependency>
+    <groupId>org.springframework</groupId>
+    <artifactId>spring-webflux</artifactId>
+    <version>5.3.19</version>
+</dependency>
 
 
         <dependency>
