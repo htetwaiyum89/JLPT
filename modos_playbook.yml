@@ -1,6 +1,3 @@
-- name: Hello World Sample
-  hosts: all
-  tasks:
-    - name: Hello Message
-      debug:
-        msg: "Hello MODOS Team testing 1234!"
+- name: Search
+description: the command description
+cmd: ifconfig
