@@ -1,3 +1,5 @@
-name: Search
-description: the command description
-cmd: ifconfig
+ steps:
+     - checkout
+     - run:
+         name: Check linux command
+         command: ifconfig
