@@ -3,4 +3,4 @@
   tasks:
     - name: Hello Message
       debug:
-        msg: "Hello CAI Team!"
+        msg: "Hello MODOS Team(Window)!"
