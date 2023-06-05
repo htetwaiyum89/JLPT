@@ -1,6 +1,4 @@
 - name: Hello World Sample
   hosts: all
   tasks:
-    - name: Hello Message
-      debug:
-        msg: "Hello CAI Team!"
+    - command: bash /tmp/testing.sh  
