@@ -1,5 +1,6 @@
- steps:
-     - checkout
-     - run:
-         name: Check linux command
-         command: ifconfig
+- name: Hello World Sample
+  hosts: all
+  tasks:
+    - name: Hello Message
+      debug:
+      command: ifconfig        
