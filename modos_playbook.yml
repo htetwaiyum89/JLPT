@@ -3,4 +3,4 @@
   tasks:
     - name: Hello Message
       debug:
-        msg: "Hello MODOS Team!"
+        msg: "Hello MODOS Team testing 1234!"
