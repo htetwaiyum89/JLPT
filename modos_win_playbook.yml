@@ -1,4 +1,9 @@
-- name: Hello World Sample
-  hosts: all
+- name: Windows Test Playbook
+  hosts: win
   tasks:
-    - command: ipconfig  
+    - name: Remote Execute the mqsc files
+      win_shell: |
+        ipconfig
+     register: scriptoutput
+    - name: Script output
+      debug: var=scriptoutput.stdout
