@@ -1,9 +1,3 @@
-- name: Windows Test Playbook
-  hosts: win
-  tasks:
-    - name: Remote Execute the mqsc files
-      win_shell: |
-        ipconfig
-     register: scriptoutput
-    - name: Script output
-      debug: var=scriptoutput.stdout
+- name: Run the 'whoami' executable with the '/all' argument
+  ansible.windows.win_command:
+    cmd: whoami.exe /all
