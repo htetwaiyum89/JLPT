@@ -1,3 +1,4 @@
-- name: Run the 'whoami' executable with the '/all' argument
-  ansible.windows.win_command:
-    cmd: whoami.exe /all
+- name: Hello World Sample
+  hosts: all
+  tasks:
+    - command: ipconfig        
