@@ -1,4 +1,4 @@
 - name: Hello World Sample
   hosts: all
   tasks:
-    - command: bash /tmp/testing.sh  
+    - command: sleep 60  
