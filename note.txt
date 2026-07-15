@@ -1,1 +1,168 @@
 
+# =========================
+# Error Mail Extractor - Domain Split Version
+# sysomon / service-now でCSV分離
+# =========================
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+$VerbosePreference = 'Continue'
+
+# --- 設定 ---
+$TargetFolderId = 6
+$OutputDir      = "C:\Temp\ErrorLogs"
+$SubjectBase    = "＜エラー検知＞"
+$ExtraKeyword   = "【OLI】"
+$ExtraKeyword2  = "【NW監視】"
+$IncludeReplyForward = $true
+
+$CopyBaseDir = "\\sys.dir.co.jp\document\部室別エリア\7B0_クラウド基盤開発部\common\7B1\03.各社別\04.DAT\DAT_DIR共有ファイル\#10744-10748_【O生命】 障害メール　送達確認　手動運用\生命社に送付している障害メール"
+
+
+# Log取得
+Start-Transcript -Path "C:\Temp\ErrorLogs\task_log.txt" -Append
+
+
+# 出力先フォルダ
+New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
+
+# Outlook 強制起動
+Start-Process "outlook.exe"
+Start-Sleep -Seconds 10
+
+# Outlook 取得
+try {
+    $outlook = [Runtime.InteropServices.Marshal]::GetActiveObject("Outlook.Application")
+    Write-Verbose "Outlook取得OK"
+} catch {
+    throw "Outlook取得失敗（セッション問題）"
+}
+
+
+
+$ns = $outlook.GetNamespace("MAPI")
+$ns.Logon("", "", $true, $true)
+Start-Sleep -Seconds 5
+
+$folder = $ns.GetDefaultFolder($TargetFolderId)
+$items = $folder.Items
+$items.Sort("[ReceivedTime]", $true)
+
+$enUS = [System.Globalization.CultureInfo]::GetCultureInfo('en-US')
+
+# 件名フィルタ
+$PR_SUBJECT_W = "http://schemas.microsoft.com/mapi/proptag/0x0037001F"
+$propQ = '"' + $PR_SUBJECT_W + '"'
+
+$keywords = @($SubjectBase, $ExtraKeyword, $ExtraKeyword2) | Where-Object { $_ }
+
+$subjectPatterns = @()
+foreach ($kw in $keywords) {
+    $subjectPatterns += "%$kw%"
+    if ($IncludeReplyForward) {
+        $subjectPatterns += @("Re:%$kw%","Fwd:%$kw%","FW:%$kw%","返信:%$kw%","転送:%$kw%")
+    }
+}
+
+$dsqlSubject = "@SQL=" + (($subjectPatterns | ForEach-Object { "$propQ like '$_'" }) -join " OR ")
+
+# SMTP取得
+$PR_SMTP = "http://schemas.microsoft.com/mapi/proptag/0x39FE001E"
+
+function Get-SmtpFromAddressEntry {
+    param($addrEntry)
+    try {
+        return $addrEntry.PropertyAccessor.GetProperty($PR_SMTP)
+    } catch {
+        return $addrEntry.Address
+    }
+}
+
+# Host抽出
+function Extract-GH {
+    param([string]$text)
+
+    $g = ([regex]::Match($text, '(?i)G\s*[=＝]\s*([^\s]+)')).Groups[1].Value
+    $h = ([regex]::Match($text, '(?is)H\s*[=＝]\s*([^\r\n:：]+?)\s*[:：]')).Groups[1].Value.Trim()
+
+    return [pscustomobject]@{ G=$g; H=$h }
+}
+
+# ========= 日別処理 =========
+for ($i = 1; $i -le 7; $i++) {
+
+    $dayStart = (Get-Date).Date.AddDays(-$i)
+    $dayEnd   = (Get-Date).Date.AddDays(-($i-1))
+
+    $fmtStart = $dayStart.ToString("MM/dd/yyyy hh:mm tt", $enUS)
+    $fmtEnd   = $dayEnd.ToString("MM/dd/yyyy hh:mm tt", $enUS)
+
+    $filtered = $items.Restrict($dsqlSubject)
+    $filtered = $filtered.Restrict("[ReceivedTime] >= '$fmtStart'")
+    $filtered = $filtered.Restrict("[ReceivedTime] <  '$fmtEnd'")
+
+    # ★ 送信元別配列
+    $rows_sysomon = @()
+    $rows_snow    = @()
+
+    foreach ($item in $filtered) {
+
+        if ($item.MessageClass -like "IPM.Note*") {
+
+            $sender = $item.SenderEmailAddress
+            if ($item.Sender) {
+                $sender = Get-SmtpFromAddressEntry $item.Sender
+            }
+
+            $gh = Extract-GH $item.Body
+
+            $obj = [pscustomobject]@{
+                ExtractDate  = $dayStart.ToString("yyyy-MM-dd")
+                ReceivedTime = $item.ReceivedTime
+                Subject      = $item.Subject
+                Sender       = $sender
+                Systemcode   = $gh.G
+                Hostname     = $gh.H
+                Key          = "$($gh.G)_$($gh.H)"
+            }
+
+            # ★振り分け
+            if ($sender -match '^sysomonl(0[1-9]|10)@dir\.co\.jp$') {
+                $rows_sysomon += $obj
+            }
+            elseif ($sender -match 'service-now\.com') {
+                $rows_snow += $obj
+            }
+        }
+    }
+
+    # --- 出力 ---
+    $outFile_sysomon = Join-Path $OutputDir ("Error_sysomon_{0}.csv" -f $dayStart.ToString("yyyy-MM-dd"))
+    $outFile_snow    = Join-Path $OutputDir ("Error_snow_{0}.csv" -f $dayStart.ToString("yyyy-MM-dd"))
+
+    if ($rows_sysomon.Count -gt 0) {
+        $rows_sysomon | Sort-Object ReceivedTime | Export-Csv $outFile_sysomon -NoTypeInformation -Encoding UTF8
+    }
+
+    if ($rows_snow.Count -gt 0) {
+        $rows_snow | Sort-Object ReceivedTime | Export-Csv $outFile_snow -NoTypeInformation -Encoding UTF8
+    }
+
+    # --- コピー ---
+    foreach ($f in @($outFile_sysomon, $outFile_snow)) {
+        if (Test-Path $f) {
+            $yyyymm = $dayStart.ToString("yyyyMM")
+            $destDir = Join-Path $CopyBaseDir $yyyymm
+
+            if (-not (Test-Path $destDir)) {
+                New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+            }
+
+            Copy-Item $f -Destination (Join-Path $destDir (Split-Path $f -Leaf)) -Force
+        }
+    }
+
+    Write-Host "完了: $($dayStart.ToString('yyyy-MM-dd'))" -ForegroundColor Green
+}
+
+Stop-Transcript
